@@ -1,0 +1,632 @@
+{
+  "name": "Everest_Supplier_Evaluation_Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Everest Supplier Evaluation - Simple Multi-Agent Workflow\n\n**Setup**\n1. Add credentials: *OpenRouter API*, *Gmail OAuth2*.\n2. In the **Send Report & Wait for Approval** node, replace the `sendTo` address with the Operations Manager's email.\n3. Open the chat (Chat button) and type e.g. `Run the evaluation with the provided dataset.`\n\n**Agents:** 1 Intake -> Rule Engine (code) -> 2 Risk -> 3 Recommendation -> 4 QA Critic -> 5 Report Writer -> Gmail (send & wait) -> end.\n",
+        "height": 282,
+        "width": 560,
+        "color": 5
+      },
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1b793c40-4b2f-48fb-b0a9-39141283fe19"
+    },
+    {
+      "parameters": {
+        "options": {
+          "allowFileUploads": true
+        }
+      },
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        48,
+        432
+      ],
+      "webhookId": "48e19461-5302-4c2b-9416-5203e3112d0d",
+      "id": "798b798b-a5dc-41db-8514-4109c78260af"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base_data = {\n  requirements: {\n    company: \"Everest Manufacturing Pvt. Ltd.\",\n    department: \"Operations\",\n    requesting_department: \"Administration\",\n    item: \"Laptops for newly hired employees\",\n    quantity: 25,\n    max_budget_npr: 2500000,\n    max_delivery_days: 14,\n    min_warranty_years: 2,\n    payment_preference: \"30 days after delivery\",\n    min_ram_gb: 16,\n    min_storage_gb: 512,\n    processor_requirement: \"Intel Core i5 / equivalent or higher\",\n    os_required: \"Licensed Windows 11 Pro\",\n    rating_review_below: 3,\n    late_delivery_flag_above: 2,\n    policy_notes: [\n      \"Budget: total quotation should not exceed NPR 2,500,000\",\n      \"Technical: supplier must meet all minimum laptop specifications\",\n      \"Delivery: preferred within 14 days\",\n      \"Warranty: minimum 2-year warranty is required\",\n      \"Payment terms: 30-day payment after delivery is preferred\",\n      \"Supplier rating below 3/5 requires management review\",\n      \"More than 2 late deliveries during the previous year must be flagged\",\n      \"Missing warranty, tax, delivery or payment information must be flagged\",\n      \"AI may recommend; the Operations Manager gives final approval\"\n    ]\n  },\n  suppliers: [\n    { name: \"TechNova Suppliers Pvt. Ltd.\", product: \"Dell Latitude 3550\", quantity: 25, processor: \"Intel Core i5\", ram_gb: 16, storage_gb: 512, os: \"Windows 11 Pro\", unit_price: 92000, subtotal: 2300000, vat_included: true, total_price: 2300000, delivery_days: 10, warranty_years: 3, payment_terms: \"30 days after delivery\", validity_days: 30, rating: 4.6, orders_last_year: 8, late_deliveries: 0, quality_complaints: 1, relationship_years: 3 },\n    { name: \"Digital Hub Nepal Pvt. Ltd.\", product: \"Lenovo ThinkPad E14\", quantity: 25, processor: \"Intel Core i5\", ram_gb: 16, storage_gb: 512, os: \"Windows 11 Pro\", unit_price: 88000, subtotal: 2200000, vat_included: true, total_price: 2200000, delivery_days: 21, warranty_years: 2, payment_terms: \"50% advance, 50% on delivery\", validity_days: 15, rating: 4.1, orders_last_year: 6, late_deliveries: 3, quality_complaints: 0, relationship_years: 2 },\n    { name: \"Apex IT Traders\", product: \"HP ProBook 440\", quantity: 25, processor: \"Intel Core i7\", ram_gb: 16, storage_gb: 512, os: \"Windows 11 Pro\", unit_price: 96000, subtotal: 2400000, vat_included: true, total_price: 2400000, delivery_days: 7, warranty_years: 1, payment_terms: \"30 days after delivery\", validity_days: 30, rating: 4.8, orders_last_year: 5, late_deliveries: 0, quality_complaints: 0, relationship_years: 4 }\n  ]\n};\nconst chat = String($input.first().json.chatInput || '').trim();\nreturn [{ json: { chat_request: chat, base_data } }];"
+      },
+      "name": "Load Business Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        432
+      ],
+      "id": "c97e41c1-49d2-4537-8d9f-4a9220e379ef"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=BASE BUSINESS DATA (JSON):\n{{ JSON.stringify($json.base_data) }}\n\nOPERATIONS MANAGER CHAT MESSAGE:\n{{ $json.chat_request }}\n\nReturn ONLY a JSON object with exactly these four top-level keys:\n\"requirements\": the same keys and structure as base data requirements, with any explicitly requested changes applied.\n\"suppliers\": an array with one object per supplier, each keeping exactly these keys: name, product, quantity, processor, ram_gb, storage_gb, os, unit_price, subtotal, vat_included, total_price, delivery_days, warranty_years, payment_terms, validity_days, rating, orders_last_year, late_deliveries, quality_complaints, relationship_years. Use null for any value the chat message says is missing, unavailable or unknown.\n\"changes_applied\": an array of short strings describing each change you made because of the chat message (empty array if none).\n\"data_issues\": an array of short strings describing missing, unclear or contradictory information (empty array if none).",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the Intake and Validation Agent in Everest Manufacturing's supplier evaluation system. Your ONLY job is to prepare clean structured data. You never evaluate, score or rank suppliers. Rules: (1) Use only the base business data and the Operations Manager's chat message. (2) Never invent, guess or fill in a missing value - use null. (3) Apply a change only when the chat message explicitly states it. If a unit price changes, recompute subtotal and total_price as unit_price x quantity and say so in changes_applied. (4) If a value is unclear, contradictory or unusable, describe it in data_issues. (5) If the chat message asks for no changes, change nothing. (6) Output ONLY valid JSON - no markdown, no commentary."
+            }
+          ]
+        }
+      },
+      "name": "Agent 1 - Intake",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        608,
+        432
+      ],
+      "id": "f17b24dc-c2b3-46c5-83fd-1603afb8627c"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1-nano",
+        "options": {}
+      },
+      "name": "Model - Agent 1 - Intake",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        608,
+        688
+      ],
+      "id": "d4cbc932-d336-45af-8ba5-b4b3cc613e1e",
+      "credentials": {
+        "openRouterApi": {
+          "id": "3CCxqCwy2PeaVldP",
+          "name": "OpenRouter account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const src = $('Load Business Data').first().json;\nconst base = src.base_data;\nconst chat = src.chat_request;\nconst raw = $input.first().json.text || '';\n\nfunction parseJSON(t) {\n  t = String(t).replace(/```json|```/g, '').trim();\n  return JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));\n}\nlet intake = null, parseError = null;\ntry { intake = parseJSON(raw); } catch (err) { parseError = err.message; }\n\nconst dataIssues = [], changes = [];\nlet suppliers;\nconst req = Object.assign({}, base.requirements);\nif (intake && Array.isArray(intake.suppliers) && intake.suppliers.length) {\n  suppliers = intake.suppliers;\n  if (intake.requirements) for (const k of Object.keys(intake.requirements)) {\n    const v = intake.requirements[k];\n    if (v !== null && v !== undefined) req[k] = v;\n  }\n  (intake.changes_applied || []).forEach(x => changes.push(x));\n  (intake.data_issues || []).forEach(x => dataIssues.push(x));\n} else {\n  suppliers = base.suppliers;\n  dataIssues.push('Intake agent output could not be parsed (' + (parseError || 'no suppliers') + '). Original dataset used unchanged; changes from the manager chat message were NOT applied.');\n}\n\nconst num = v => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? null : Number(v);\nconst npr = n => 'NPR ' + Number(n).toLocaleString('en-US');\nconst toBool = v => {\n  if (v === true || /^(true|yes|included)$/i.test(String(v))) return true;\n  if (v === false || /^(false|no|excluded)$/i.test(String(v))) return false;\n  return null;\n};\n\nconst notes = [\n  'Delivery within 14 days is listed as \"Required\" in the Purchase Request but as \"Preferred\" in the Operations Policy. It is treated here as a preference: any miss is flagged for the Operations Manager to interpret, not used to disqualify.',\n  'Payment terms of 30 days after delivery are a preference in both documents. Other terms are flagged as a risk, not a disqualification.'\n];\n\nconst results = suppliers.map(s => {\n  const c = {};\n  const set = (key, label, type, status, detail) => { c[key] = { label, type, status, detail }; };\n  const total = num(s.total_price), unit = num(s.unit_price), qty = num(s.quantity);\n  const ram = num(s.ram_gb), sto = num(s.storage_gb), war = num(s.warranty_years);\n  const del = num(s.delivery_days), rat = num(s.rating), late = num(s.late_deliveries);\n  const vat = toBool(s.vat_included);\n\n  // ---- Mandatory requirements ----\n  if (total === null) set('budget', 'Budget', 'mandatory', 'cannot_verify', 'Total price not available');\n  else if (total > req.max_budget_npr) set('budget', 'Budget', 'mandatory', 'fail', npr(total) + ' exceeds maximum ' + npr(req.max_budget_npr));\n  else if (vat === false) set('budget', 'Budget', 'mandatory', 'review', npr(total) + ' is within budget BUT VAT is NOT included, so the final cost may exceed the budget');\n  else set('budget', 'Budget', 'mandatory', 'pass', npr(total) + ' within maximum ' + npr(req.max_budget_npr));\n\n  if (qty === null) set('quantity', 'Quantity', 'mandatory', 'cannot_verify', 'Quoted quantity not available');\n  else if (qty !== req.quantity) set('quantity', 'Quantity', 'mandatory', 'fail', 'Quoted ' + qty + ' units, required ' + req.quantity);\n  else set('quantity', 'Quantity', 'mandatory', 'pass', qty + ' units quoted');\n\n  if (ram === null) set('ram', 'RAM', 'mandatory', 'cannot_verify', 'RAM not stated');\n  else set('ram', 'RAM', 'mandatory', ram >= req.min_ram_gb ? 'pass' : 'fail', ram + ' GB vs minimum ' + req.min_ram_gb + ' GB');\n\n  if (sto === null) set('storage', 'SSD storage', 'mandatory', 'cannot_verify', 'Storage not stated');\n  else set('storage', 'SSD storage', 'mandatory', sto >= req.min_storage_gb ? 'pass' : 'fail', sto + ' GB vs minimum ' + req.min_storage_gb + ' GB');\n\n  const os = String(s.os || '');\n  if (!os) set('os', 'Operating system', 'mandatory', 'cannot_verify', 'OS not stated');\n  else set('os', 'Operating system', 'mandatory', /windows\\s*11\\s*pro/i.test(os) ? 'pass' : 'fail', '\"' + os + '\" vs required Windows 11 Pro');\n\n  const proc = String(s.processor || '');\n  const m = proc.match(/i\\s*-?\\s*([3579])/i);\n  if (!proc) set('processor', 'Processor', 'mandatory', 'cannot_verify', 'Processor not stated');\n  else if (m) set('processor', 'Processor', 'mandatory', Number(m[1]) >= 5 ? 'pass' : 'fail', '\"' + proc + '\" vs minimum Intel Core i5 or equivalent');\n  else set('processor', 'Processor', 'mandatory', 'unclear', '\"' + proc + '\" - equivalence to Intel Core i5 needs human interpretation');\n\n  if (war === null) set('warranty', 'Warranty', 'mandatory', 'cannot_verify', 'Warranty not stated');\n  else set('warranty', 'Warranty', 'mandatory', war >= req.min_warranty_years ? 'pass' : 'fail', war + ' year(s) vs minimum ' + req.min_warranty_years + ' years');\n\n  // ---- Preferences ----\n  if (del === null) set('delivery', 'Delivery time', 'preference', 'cannot_verify', 'Delivery time not stated');\n  else set('delivery', 'Delivery time', 'preference', del <= req.max_delivery_days ? 'pass' : 'not_met', del + ' days vs ' + req.max_delivery_days + ' days (see interpretation note on required vs preferred)');\n\n  const pay = String(s.payment_terms || '');\n  if (!pay) set('payment', 'Payment terms', 'preference', 'cannot_verify', 'Payment terms not stated');\n  else if (/advance/i.test(pay)) set('payment', 'Payment terms', 'preference', 'not_met', '\"' + pay + '\" vs preferred ' + req.payment_preference + ' (advance payment = cash-flow risk)');\n  else if (/30\\s*days?\\s*after\\s*delivery/i.test(pay)) set('payment', 'Payment terms', 'preference', 'pass', '\"' + pay + '\"');\n  else set('payment', 'Payment terms', 'preference', 'unclear', '\"' + pay + '\" - differs from preferred wording; needs human interpretation');\n\n  // ---- Policy flags ----\n  if (rat === null) set('rating', 'Supplier rating', 'policy_flag', 'cannot_verify', 'Rating not available');\n  else set('rating', 'Supplier rating', 'policy_flag', rat < req.rating_review_below ? 'review' : 'pass', rat + '/5 (management review if below ' + req.rating_review_below + ')');\n\n  if (late === null) set('late', 'Late deliveries (last year)', 'policy_flag', 'cannot_verify', 'Late delivery count not available');\n  else set('late', 'Late deliveries (last year)', 'policy_flag', late > req.late_delivery_flag_above ? 'review' : 'pass', late + ' late deliveries (flag if more than ' + req.late_delivery_flag_above + ')');\n\n  // ---- Information / consistency ----\n  if (vat === null) set('tax', 'Tax (VAT) information', 'policy_flag', 'cannot_verify', 'VAT treatment not stated');\n  else set('tax', 'Tax (VAT) information', 'policy_flag', 'pass', vat ? 'VAT included' : 'VAT NOT included');\n\n  if (unit !== null && qty !== null && total !== null && unit * qty !== total) {\n    set('price_consistency', 'Price arithmetic', 'info', 'review', 'Unit price x quantity = ' + npr(unit * qty) + ' but stated total is ' + npr(total));\n    dataIssues.push(s.name + ': unit price x quantity (' + npr(unit * qty) + ') does not match stated total (' + npr(total) + ').');\n  }\n  const val = num(s.validity_days);\n  set('validity', 'Quotation validity', 'info', val === null ? 'cannot_verify' : 'pass', val === null ? 'Validity period not stated' : val + ' days');\n  set('quality', 'Quality complaints (info only)', 'info', 'pass', (num(s.quality_complaints) === null ? 'not available' : s.quality_complaints) + ' complaint(s); ' + (s.orders_last_year ?? 'n/a') + ' orders last year; ' + (s.relationship_years ?? 'n/a') + ' years relationship');\n\n  const missing = [];\n  if (war === null) missing.push('warranty');\n  if (vat === null) missing.push('tax (VAT) information');\n  if (del === null) missing.push('delivery time');\n  if (!pay) missing.push('payment terms');\n\n  const mand = ['budget', 'quantity', 'ram', 'storage', 'os', 'processor', 'warranty'];\n  const fails = mand.filter(k => c[k].status === 'fail');\n  const unresolved = mand.filter(k => ['cannot_verify', 'unclear'].includes(c[k].status));\n  const flags = Object.keys(c).filter(k => ['review', 'not_met'].includes(c[k].status) || (c[k].status === 'unclear' && !mand.includes(k)));\n\n  let overall = 'FULLY_COMPLIANT';\n  if (fails.length) overall = 'NON_COMPLIANT';\n  else if (unresolved.length || missing.length) overall = 'NEEDS_CLARIFICATION';\n  else if (flags.length) overall = 'COMPLIANT_WITH_FLAGS';\n\n  return {\n    name: s.name, product: s.product, quote_and_history: s, checks: c,\n    missing_information: missing,\n    mandatory_failures: fails.map(k => c[k].label + ': ' + c[k].detail),\n    unresolved_mandatory: unresolved.map(k => c[k].label + ': ' + c[k].detail),\n    flags: flags.map(k => c[k].label + ': ' + c[k].detail),\n    overall_status: overall,\n    management_review_required: flags.length > 0 || overall !== 'FULLY_COMPLIANT'\n  };\n});\n\nreturn [{ json: { requirements: req, suppliers: results, changes_applied: changes, data_issues: dataIssues, interpretation_notes: notes, chat_request: chat } }];"
+      },
+      "name": "Rule Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        432
+      ],
+      "id": "fd75c645-bc96-4686-91bc-34ab8fe2fba7"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=RULE ENGINE RESULTS (JSON):\n{{ JSON.stringify($json) }}\n\nReturn ONLY a JSON object with this structure:\n\"supplier_risk_assessments\": an array with one object per supplier containing: \"supplier\" (name), \"overall_status\" (copied unchanged), \"risks\" (array of objects with \"risk\", \"severity\" as High/Medium/Low, and \"evidence\"), \"management_review_items\" (array of strings), \"clarifications_needed\" (array of questions for the supplier or manager).\n\"cross_cutting_issues\": an array of strings covering data issues, changes applied from the chat message, and interpretation notes that need a human decision.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the Compliance and Risk Agent in Everest Manufacturing's supplier evaluation system. You receive deterministic rule-check results for every supplier (purchase request, Operations policy, quotation and supplier history). Your job is to turn them into a clear risk register for the Operations Manager. Rules: (1) Do NOT change any check status or overall_status - they are final. (2) Every risk must cite its evidence: the source (purchase request, policy, quotation or supplier history) and the actual value. (3) Never invent facts or policy rules. If something is unclear, say it needs clarification. (4) Separate clearly: mandatory failures, preference misses, policy flags needing management review, and missing information. (5) Output ONLY valid JSON - no markdown."
+            }
+          ]
+        }
+      },
+      "name": "Agent 2 - Risk",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        1168,
+        432
+      ],
+      "id": "c0d39583-70c5-4667-9dd9-0cba9e0426a3"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1-nano",
+        "options": {}
+      },
+      "name": "Model - Agent 2 - Risk",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        688
+      ],
+      "id": "5b6ccd67-26fd-4308-9d98-8f5d830e689c",
+      "credentials": {
+        "openRouterApi": {
+          "id": "3CCxqCwy2PeaVldP",
+          "name": "OpenRouter account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=RULE ENGINE RESULTS (JSON):\n{{ JSON.stringify($('Rule Engine').first().json) }}\n\nRISK REGISTER FROM AGENT 2:\n{{ $('Agent 2 - Risk').first().json.text }}\n\nReturn ONLY a JSON object with this structure:\n\"recommendation_status\": one of RECOMMENDED, RECOMMENDED_WITH_CONDITIONS, NO_CLEAR_RECOMMENDATION, ALL_NON_COMPLIANT.\n\"recommended_supplier\": supplier name or null.\n\"runner_up\": supplier name or null.\n\"criteria_comparison\": an array of objects with \"criterion\", \"best_supplier\", \"notes\" covering price, delivery, warranty, payment terms, rating, late deliveries, quality complaints.\n\"supplier_summaries\": an array of objects with \"supplier\", \"strengths\" (array), \"weaknesses\" (array), \"verdict\" (Recommended, Acceptable alternative, Not recommended, or Cannot assess).\n\"reasoning\": a paragraph explaining why, quoting actual values as evidence.\n\"trade_offs\": a paragraph on where suppliers are better or worse in different areas and how you balanced them.\n\"conditions_before_purchase\": array of strings.\n\"human_approval_required\": array of strings listing every decision the Operations Manager must make.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the Comparison and Recommendation Agent in Everest Manufacturing's supplier evaluation system. You support, and never replace, the Operations Manager's decision. Apply this evaluation logic in order: TIER 1 - Any supplier that fails a mandatory requirement (budget, quantity, specs, warranty) is not recommendable. TIER 2 - A supplier with missing or unclear mandatory information cannot be confidently recommended; list what must be clarified. TIER 3 - Policy flags (rating below 3, more than 2 late deliveries, missing tax or payment or delivery information) require management review and count against a supplier. TIER 4 - Preferences (delivery within 14 days, payment 30 days after delivery) are weighed as trade-offs, not automatic disqualifiers. TIER 5 - Among the remaining suppliers compare total cost, delivery, warranty, payment terms, rating, late deliveries and quality complaints together. NEVER choose a supplier on price alone. Rules: use only the supplied evidence, never invent facts, cite actual values, and if no supplier can be recommended confidently say so. The final purchasing decision belongs to the Operations Manager. Output ONLY valid JSON - no markdown. Status rule: if at least one supplier passes all mandatory requirements, you MUST name the best one as recommended_supplier and use RECOMMENDED (no flags) or RECOMMENDED_WITH_CONDITIONS (flags or trade-offs remain). Use NO_CLEAR_RECOMMENDATION only when no supplier is eligible or all eligible suppliers have unresolved missing information. recommended_supplier must be the exact supplier name from the data."
+            }
+          ]
+        }
+      },
+      "name": "Agent 3 - Recommendation",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        1440,
+        432
+      ],
+      "id": "f6542c72-711f-4309-a9a2-7bc50be862ac"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1-nano",
+        "options": {}
+      },
+      "name": "Model - Agent 3 - Recommendation",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        688
+      ],
+      "id": "254d4519-54cb-40d0-b627-a97aed870c34",
+      "credentials": {
+        "openRouterApi": {
+          "id": "3CCxqCwy2PeaVldP",
+          "name": "OpenRouter account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=RULE ENGINE RESULTS (JSON):\n{{ JSON.stringify($('Rule Engine').first().json) }}\n\nRECOMMENDATION FROM AGENT 3:\n{{ $('Agent 3 - Recommendation').first().json.text }}\n\nReturn ONLY a JSON object with this structure:\n\"verdict\": PASS or FAIL.\n\"checks\": an array of objects with \"check\", \"result\" (Pass or Fail), \"comment\".\n\"issues_found\": array of strings (empty if none).\n\"required_corrections\": array of strings (empty if none).",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the QA Critic Agent in Everest Manufacturing's supplier evaluation system. You independently audit the recommendation before it reaches management. Check: (1) Every number and claim in the recommendation matches the rule engine data - nothing invented. (2) No supplier with a mandatory failure is recommended. (3) Missing or unclear information was flagged, not assumed. (4) The recommendation is not based on price alone. (5) Policy flags (rating, late deliveries, missing information) are reflected. (6) The final decision is left to the Operations Manager. Be strict but fair. Output ONLY valid JSON - no markdown."
+            }
+          ]
+        }
+      },
+      "name": "Agent 4 - QA Critic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        1728,
+        432
+      ],
+      "id": "bd8ad43d-c697-4f30-9cbd-7166dbb644db"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1-nano",
+        "options": {}
+      },
+      "name": "Model - Agent 4 - QA Critic",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1728,
+        688
+      ],
+      "id": "f62224d2-0f21-4f8f-a9f2-b8d0d2a877d6",
+      "credentials": {
+        "openRouterApi": {
+          "id": "3CCxqCwy2PeaVldP",
+          "name": "OpenRouter account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=RULE ENGINE RESULTS (JSON):\n{{ JSON.stringify($('Rule Engine').first().json) }}\n\nRISK REGISTER (Agent 2):\n{{ $('Agent 2 - Risk').first().json.text }}\n\nRECOMMENDATION (Agent 3):\n{{ $('Agent 3 - Recommendation').first().json.text }}\n\nQA AUDIT (Agent 4):\n{{ $('Agent 4 - QA Critic').first().json.text }}\n\nWrite the HTML report now.",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are the Report Writer Agent in Everest Manufacturing's supplier evaluation system. You turn already-verified analysis into a management-ready HTML email for the Operations Manager. You do NOT re-evaluate, re-rank or add facts; every number and statement must come from the inputs. Use exactly these sections in this order: 1 Executive Summary (recommendation status, suggested supplier, one-line reason). 2 Supplier Comparison (an HTML table with one row per supplier and columns for product, total price, delivery, warranty, payment terms, rating, late deliveries, quality complaints, overall status). 3 Company Requirements Check (for each supplier list each mandatory check and preference with pass, fail or not met, and the actual value). 4 Risks and Exceptions (including items needing management review). 5 Information Requiring Clarification (missing, unclear or conflicting items, and any changes applied from the chat message). 6 Recommendation and Reasoning (why, trade-offs, conditions). 7 QA Check (verdict and any issues). 8 Approval Required (state clearly that this is a recommendation only and that the Operations Manager must approve or decline using the buttons below). Formatting: clean HTML fragment only, using h2, table with inline border styling, ul and li. No html, head or body tags, no markdown, no code fences. The Executive Summary must repeat Agent 3's recommendation_status and recommended_supplier exactly as given; never contradict them."
+            }
+          ]
+        }
+      },
+      "name": "Agent 5 - Report Writer",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.6,
+      "position": [
+        2000,
+        432
+      ],
+      "id": "64d07f22-85b9-4c0c-92ed-a977bd6b3e3a"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1-nano",
+        "options": {}
+      },
+      "name": "Model - Agent 5 - Report Writer",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        688
+      ],
+      "id": "e547a6ba-aa47-442d-a886-7f610081c5eb",
+      "credentials": {
+        "openRouterApi": {
+          "id": "3CCxqCwy2PeaVldP",
+          "name": "OpenRouter account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const clean = t => String(t || '').replace(/```html|```/gi, '').trim();\nconst parse = t => { t = String(t || '').replace(/```json|```/g, '').trim(); return JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); };\nlet rec = {}, qa = {};\ntry { rec = parse($('Agent 3 - Recommendation').first().json.text); } catch (e) {}\ntry { qa = parse($('Agent 4 - QA Critic').first().json.text); } catch (e) {}\nlet html = clean($('Agent 5 - Report Writer').first().json.text);\nconst qaPass = String(qa.verdict || '').toUpperCase() === 'PASS';\nif (!qaPass) {\n  html = '<p style=\"background:#fff3cd;padding:8px;border:1px solid #e0a800\"><b>WARNING: the QA Critic did not fully pass this evaluation. Review the QA section carefully before deciding.</b></p>' + html;\n}\nconst summary =\n  '**Evaluation complete.**\\n\\n' +\n  '- Recommendation status: ' + (rec.recommendation_status || 'see report') + '\\n' +\n  '- Suggested supplier: ' + (rec.recommended_supplier || 'none') + '\\n' +\n  '- QA check: ' + (qa.verdict || 'unknown') + '\\n\\n' +\n  'The full report has been emailed to the Operations Manager. The workflow is now waiting for their Approve / Decline response. This is a recommendation only - the final purchasing decision stays with the Operations Manager.';\nreturn [{ json: { html, chat_summary: summary, recommended_supplier: rec.recommended_supplier || null, qa_verdict: qa.verdict || null } }];"
+      },
+      "name": "Prepare Email and Chat Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        432
+      ],
+      "id": "abb2fe28-19d8-4bb0-b375-272f9829a6eb"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "operations.manager@example.com",
+        "subject": "Everest Laptop Purchase - Supplier Evaluation - Your Approval Needed",
+        "message": "={{ $('Prepare Email and Chat Summary').first().json.html }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "Approve Recommendation",
+            "disapproveLabel": "Decline / Do Not Proceed"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 48
+            }
+          }
+        }
+      },
+      "name": "Send Report & Wait for Approval",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2848,
+        432
+      ],
+      "id": "eab11d6c-b60d-454d-ab27-c56fd1ed8657",
+      "webhookId": "5587d4d3-0dbf-46fc-a247-ca762bb7119c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "WiH63xNliI7xNJN7",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "24bed2db-4144-4601-8d29-662ba5042eec",
+              "leftValue": "={{ $json.data && $json.data.approved === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Manager Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        432
+      ],
+      "id": "5efd2807-63b7-4ffe-92a7-717e1fc5f0a7"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "39b22af2-1561-4297-874c-6d8153943de8",
+              "name": "final_decision",
+              "value": "APPROVED_BY_OPERATIONS_MANAGER",
+              "type": "string"
+            },
+            {
+              "id": "37471d2b-1fb1-452c-a20f-9e2736f4fb30",
+              "name": "recommended_supplier",
+              "value": "={{ $('Prepare Email and Chat Summary').first().json.recommended_supplier }}",
+              "type": "string"
+            },
+            {
+              "id": "4dc06c4b-6bee-4a7e-aac1-17a57feb2676",
+              "name": "note",
+              "value": "Human approval recorded. Any purchase order is raised outside this workflow.",
+              "type": "string"
+            },
+            {
+              "id": "1b42ac83-d39b-4386-8d44-cf43c0b9d824",
+              "name": "decided_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Final: Approved by Manager",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3408,
+        304
+      ],
+      "id": "db608680-4167-4bf9-91a5-9649e6f452b9"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a78d73f-df39-4044-84e8-263ae99f323f",
+              "name": "final_decision",
+              "value": "DECLINED_OR_NO_RESPONSE",
+              "type": "string"
+            },
+            {
+              "id": "20d7ed48-46f6-403c-abf5-ea13f0306d06",
+              "name": "recommended_supplier",
+              "value": "={{ $('Prepare Email and Chat Summary').first().json.recommended_supplier }}",
+              "type": "string"
+            },
+            {
+              "id": "c9aaa5cd-0d41-47fc-ba1b-25b747669e50",
+              "name": "note",
+              "value": "No approval given. No purchase proceeds; manager review continues manually.",
+              "type": "string"
+            },
+            {
+              "id": "058c1e20-8283-48d6-bde5-6127bef912ec",
+              "name": "decided_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Final: Declined or No Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3408,
+        544
+      ],
+      "id": "7af5e530-fe8b-4579-8eb2-13474f5f4c62"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Model - Agent 1 - Intake": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 1 - Intake",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model - Agent 2 - Risk": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 2 - Risk",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model - Agent 3 - Recommendation": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 3 - Recommendation",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model - Agent 4 - QA Critic": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 4 - QA Critic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model - Agent 5 - Report Writer": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent 5 - Report Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Business Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Business Data": {
+      "main": [
+        [
+          {
+            "node": "Agent 1 - Intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 1 - Intake": {
+      "main": [
+        [
+          {
+            "node": "Rule Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rule Engine": {
+      "main": [
+        [
+          {
+            "node": "Agent 2 - Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 2 - Risk": {
+      "main": [
+        [
+          {
+            "node": "Agent 3 - Recommendation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 3 - Recommendation": {
+      "main": [
+        [
+          {
+            "node": "Agent 4 - QA Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 4 - QA Critic": {
+      "main": [
+        [
+          {
+            "node": "Agent 5 - Report Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent 5 - Report Writer": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email and Chat Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email and Chat Summary": {
+      "main": [
+        [
+          {
+            "node": "Send Report & Wait for Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report & Wait for Approval": {
+      "main": [
+        [
+          {
+            "node": "Manager Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manager Approved?": {
+      "main": [
+        [
+          {
+            "node": "Final: Approved by Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final: Declined or No Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "27f8408f-0340-4469-87eb-6da935f9ece2",
+  "meta": {
+    "instanceId": "df1a7984783bbb10c225496a33bf680939d832a50fe60d1fc826cd58f08f036a"
+  },
+  "nodeGroups": [],
+  "id": "l4AdxdC2auY4ojPL",
+  "tags": []
+}

@@ -1,0 +1,38 @@
+# Secrets and environment files - never commit these
+.env
+.env.*
+*.env
+*.pem
+*.key
+secrets/
+credentials*.json
+
+# n8n local data (Docker volumes, database, encryption key)
+.n8n/
+n8n_data/
+*.sqlite
+*.sqlite3
+database.sqlite
+config
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+~$*
+
+# Office lock files
+.~lock.*#
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
